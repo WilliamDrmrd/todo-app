@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: todo_db
+      POSTGRES_USER: todo_user
+      POSTGRES_PASSWORD: todo_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U todo_user -d todo_db"]
+      interval: 5s
+      timeout: 10s
+      retries: 3
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgresql://todo_user:todo_password@postgres:5432/todo_db?schema=public
+      PORT: 3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - backend_node_modules:/app/node_modules
+    command: sh -c "npx prisma migrate deploy && npm run start:dev"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:3001
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+
+volumes:
+  postgres_data:
+  backend_node_modules:
+  frontend_node_modules:
